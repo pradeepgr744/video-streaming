@@ -17,7 +17,7 @@ const userSchema = new Schema(
         required: true,
         unique: true,
         lowercase: true,
-        trim: tru
+        trim: true
     },
     fullName: {
         type: String,
@@ -50,7 +50,7 @@ const userSchema = new Schema(
 
 userSchema.pre("save",async function (next){
     if(this.isModified("password")){
-    this.password=bcrypt.hash(this.password,10)
+    this.password=await bcrypt.hash(this.password,10)
     next()
     }else{next()}
 })
@@ -86,4 +86,4 @@ userSchema.methods.generateRefreshToken=async function(){
     )
 }
 
-export const user = mongoose.model('user', userSchema);
+export const User = mongoose.model('User', userSchema);

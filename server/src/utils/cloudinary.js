@@ -19,7 +19,14 @@ const uploadOnCloudinary = async (localFilePath) => {
         console.log(response.url);
         return response;
     } catch (error) {
+<<<<<<< HEAD
         fs.unlinkSync(localFilePath) //remove the locally saved temporary file as the upload got failed
         
+=======
+        fs.unlinkSync(localFilePath) //remove the locallly saved temporary file as the upload got failed
+        return null
+>>>>>>> 53c0bc8b1312195a55b26e246d33659a1225b285
     }
 }
+
+export { uploadOnCloudinary }
