@@ -4,6 +4,21 @@ import { User } from "../models/user.model.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+const generateAccessAndRefreshToken = async (userId) => {
+    try {
+        const user = await User.findById(userId)
+        const accessToken = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
+
+        user.refreshToken = refreshToken
+        await user.save({ validateBeforeSave: false })
+
+        return {accessToken,refreshToken}
+    } catch (error) {
+        throw new ApiError(500, "Something went wrong when generating access token and refresh token")
+    }
+}
+
 const registerUser = asyncHandler(async (req, res) => {
     // get user details from frontend
     // validation - not empty
@@ -76,10 +91,44 @@ const registerUser = asyncHandler(async (req, res) => {
     return res.status(201).json(
         new ApiResponse(200, createdUser, "User registered Successfully")
     )
+})
+
+const loginUser = asyncHandler(async (req, res) => {
+    //req body -> data
+    //username or email
+    //find the user
+    //password check
+    //access and refresh token
+    //send cookies
+
+    const { email, username, password } = req.body
+
+    if (!(email || username)) {
+        throw new ApiError(400, "username or password is required")
+    }
+
+    const user = await User.findOne({
+        $or: [{ username }, { email }]
+    })
+
+    if (!user) {
+        throw new ApiError(400, "User doesn't exist")
+    }
+
+    if (!password) {
+        throw new ApiError(400, "Password is required")
+    }
+
+    const isPasswordvalid = await user.isPasswordCorrect(password)
+
+    if (!isPasswordvalid) {
+        throw new ApiError(401, "Invalid credentials")
+    }
+
 
 })
 
-
 export {
     registerUser,
+    loginUser
 }
