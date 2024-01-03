@@ -270,7 +270,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 })
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
-    const avatarLocalPath = req.files?.avatar[0]?.path
+    const avatarLocalPath = req.file?.path
 
     if (!avatarLocalPath) {
         throw new ApiError(400, "Avatar file is missing")
@@ -282,9 +282,9 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Error while uploading on avatar")
     }
 
-    const temp = await User.findById(req.user?._id)
+    // const temp = await User.findById(req.user?._id)
     // const oldavatar = temp.avatar
-    console.log(temp)
+    // console.log(temp)
 
 
     const user = await User.findByIdAndUpdate(req.user?._id
