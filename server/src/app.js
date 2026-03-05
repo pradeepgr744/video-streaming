@@ -16,7 +16,9 @@ app.use(cookieParser())
 
 //routes imports
 import userRouter from './routes/user.routes.js';
-
+app.get("/", (req, res) => {
+  res.json({ message: "Video Streaming API is running ✅" });
+});
 
 //routes declaration
 app.use("/api/v1/users",userRouter)
