@@ -1,6 +1,8 @@
 
 // import dotenv from "dotenv"
-process.loadEnvFile()
+if (process.env.NODE_ENV !== "production") {
+  process.loadEnvFile(); // ✅ only runs locally
+}
 import connectDB from './db/db.js';
 import {app} from "./app.js"
 
