@@ -1,6 +1,6 @@
 
 // import dotenv from "dotenv"
-process.env()
+process.loadEnvFile()
 import connectDB from './db/db.js';
 import {app} from "./app.js"
 
