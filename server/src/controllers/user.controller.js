@@ -229,7 +229,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
                     {
                         accessToken,
                         refreshToken,
-                       { user: req.user }
+                       user: req.user
                     },
                     "Access token refreshed successfully"
                 )
