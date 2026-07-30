@@ -12,7 +12,6 @@ const transporter = nodemailer.createTransport({
 });
 
 
-try {
   const info = await transporter.sendMail({
     from: process.env.EMAIL_USER,
     to,
@@ -21,9 +20,5 @@ try {
     html,
   });
 
-  console.log(info);
-} catch (err) {
-  console.error(err);
-}
 
 export default sendEmail;
