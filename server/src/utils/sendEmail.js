@@ -11,14 +11,19 @@ const transporter = nodemailer.createTransport({
   family: 4,
 });
 
-const sendEmail = async ({ to, subject, html, text }) => {
-  await transporter.sendMail({
-    from: `""<${process.env.EMAIL_USER}>`,
+
+try {
+  const info = await transporter.sendMail({
+    from: process.env.EMAIL_USER,
     to,
     subject,
     text,
     html,
   });
-};
+
+  console.log(info);
+} catch (err) {
+  console.error(err);
+}
 
 export default sendEmail;
