@@ -5,6 +5,9 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import cache from "../utils/cache.js";
+import sendMail from "../utils/sendEmail.js"
 
 const generateAccessAndRefreshToken = async (userId) => {
     try {
@@ -482,6 +485,112 @@ const getWatchHistory = asyncHandler(async (req, res) => {
     )
 })
 
+//endpoint to send OTP
+const sendOtp = asyncHandler( async ( req, res) => {
+    try{
+        const {email} = req.body;
+        if(!email){
+            return res.status(200).json(
+                new ApiResponse(
+                    200,
+                    [],
+                    "invalid email provided"
+                )
+            )
+        }
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        cache.set(email,otp)
+        await sendMail({
+            to: email,
+            subject: "OTP Verification",
+            html: `
+                <h2>Your OTP is ${otp}</h2>
+                <p>This OTP is valid for 5 minutes.</p>
+            `,
+        });
+
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                {otpSent : true},
+                "otp has been sent"
+            )
+        )
+
+    }
+    catch(err){
+        return res.status(200).json(
+            new ApiResponse(
+                500,
+                err?.message || err,
+                "exception occured"
+            )
+        )
+    }
+})
+
+//endpoint to resetpassword
+const forgotPassword = asyncHandler(async (req, res) => {
+    const { email, newPassword, otp } = req.body;
+
+    if (!email || !newPassword || !otp) {
+        return res.status(400).json(
+            new ApiResponse(
+                400,
+                null,
+                "Email, password and OTP are required"
+            )
+        );
+    }
+
+    const cachedOtp = cache.get(email);
+
+    if (!cachedOtp || cachedOtp !== otp) {
+        return res.status(401).json(
+            new ApiResponse(
+                401,
+                { isVerified: false },
+                "Invalid or expired OTP"
+            )
+        );
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const user = await User.findOneAndUpdate(
+        {
+            email
+        },
+        {
+            password: hashedPassword
+        },
+        {
+            new: true
+        }
+    );
+
+    if (!user) {
+        return res.status(404).json(
+            new ApiResponse(
+                404,
+                null,
+                "User not found"
+            )
+        );
+    }
+
+    // Remove OTP after successful password reset
+    cache.del(email);
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            { isVerified: true, updated: true },
+            "Password updated successfully"
+        )
+    );
+});
+
 export {
     registerUser,
     loginUser,
@@ -493,5 +602,7 @@ export {
     updateUserAvatar,
     updateUserCoverImage,
     getUserChannelProfile,
-    getWatchHistory
+    getWatchHistory,
+    sendOtp,
+    forgotPassword
 }
