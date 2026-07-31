@@ -79,14 +79,22 @@ let avatarLocalPath;
     // }
     // console.log(avatar)
 
-
+ 
     const user = await User.create({
         fullName,
         avatar: avatar?.url || "",
         coverImage: coverImage?.url || "",
         email,
         password,
-        username: username.toLowerCase()
+        username: username.toLowerCase(),
+        // every account starts with one default profile (no lock/pin set yet;
+        // the user can add up to 3 more, and lock any profile via update-profile)
+        profiles: [
+            {
+                name: fullName,
+                language: "en_US"
+            }
+        ]
     })
 
     const createdUser = await User.findById(user._id).select(
