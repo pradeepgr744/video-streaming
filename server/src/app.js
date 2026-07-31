@@ -22,12 +22,18 @@ app.get("/ping", (req, res) => {
 });
 //routes imports
 import userRouter from './routes/user.routes.js';
+import profileRouter from './routes/profile.routes.js';
 app.get("/", (req, res) => {
   res.json({ message: "Video Streaming API is running ✅" });
 });
 
 //routes declaration
 app.use("/api/v1/users",userRouter)
+app.use("/api/v1/users/profiles",profileRouter)
+
+//global error handler - must be registered last, after all routes
+import { errorHandler } from "./middlewares/error.middleware.js";
+app.use(errorHandler)
 
 
 export {app}
