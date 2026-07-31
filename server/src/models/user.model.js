@@ -1,6 +1,71 @@
 import mongoose, {Schema} from "mongoose";
 import jwt from "jsonwebtoken"
 import bcrypt from "bcryptjs"
+import { SUPPORTED_LANGUAGE_CODES, MAX_PROFILES, KID_AGE_LIMIT } from "../constants.js"
+
+// works out whether a profile counts as a "kid" profile from its date of birth
+export const calculateIsKid = (dob) => {
+    if (!dob) return false
+    const birthDate = new Date(dob)
+    if (isNaN(birthDate.getTime())) return false
+
+    const today = new Date()
+    let age = today.getFullYear() - birthDate.getFullYear()
+    const monthDiff = today.getMonth() - birthDate.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--
+    }
+    return age < KID_AGE_LIMIT
+}
+
+const profileSchema = new Schema(
+    {
+        name: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        dob: {
+            type: Date
+        },
+        isKid: {
+            type: Boolean,
+            default: false
+        },
+        language: {
+            type: String,
+            enum: SUPPORTED_LANGUAGE_CODES,
+            default: "en_US"
+        },
+        avatar: {
+            type: String // cloudinary url or preset avatar url
+        },
+        // hashed pin/key used to lock this specific profile. null/undefined = no lock set
+        pin: {
+            type: String,
+            default: null
+        }
+    },
+    {
+        timestamps: true
+    }
+)
+
+profileSchema.pre("save", async function (next) {
+    if (this.isModified("dob")) {
+        this.isKid = calculateIsKid(this.dob)
+    }
+
+    if (this.isModified("pin") && this.pin) {
+        this.pin = await bcrypt.hash(this.pin, 10)
+    }
+    next()
+})
+
+profileSchema.methods.isPinCorrect = async function (pin) {
+    if (!this.pin) return true // no lock set on this profile
+    return await bcrypt.compare(pin, this.pin)
+}
 
 const userSchema = new Schema(
     {
@@ -38,6 +103,15 @@ const userSchema = new Schema(
                 ref: "Video"
             }
         ],
+        profiles: {
+            type: [profileSchema],
+            validate: {
+                validator: function (profiles) {
+                    return profiles.length <= MAX_PROFILES
+                },
+                message: `A maximum of ${MAX_PROFILES} profiles is allowed per account`
+            }
+        },
         password: {
             type: String,
             required: [true, 'Password is required']
