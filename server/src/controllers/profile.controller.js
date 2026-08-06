@@ -60,7 +60,7 @@ const getProfiles = asyncHandler(async (req, res) => {
 
 // POST /profiles -> add profile: name, dob, language, pin (key to lock the profile)
 const addProfile = asyncHandler(async (req, res) => {
-    const { name, dob, language, pin } = req.body;
+    const { name, dob, language, pin,avatar } = req.body;
 
     if (!name?.trim() || !dob) {
         throw new ApiError(400, "Name and date of birth are required");
@@ -87,13 +87,16 @@ const addProfile = asyncHandler(async (req, res) => {
     if (user.profiles.length >= MAX_PROFILES) {
         throw new ApiError(400, `A maximum of ${MAX_PROFILES} profiles is allowed per account`);
     }
+const DEFAULT_AVATAR =
+  "https://img.magnific.com/premium-vector/vector-flat-illustration-grayscale-avatar-user-profile-person-icon-gender-neutral-silhouette-profile-picture-suitable-social-media-profiles-icons-screensavers-as-templatex9xa_719432-2191.jpg?semt=ais_test_b&w=740&q=80";
 
-    user.profiles.push({
-        name: name.trim(),
-        dob,
-        language: language || "en_US",
-        pin
-    });
+user.profiles.push({
+    name: name.trim(),
+    dob,
+    language: language || "en_US",
+    pin,
+    avatar: avatar || DEFAULT_AVATAR
+});
 
     await user.save({ validateBeforeSave: false });
 
