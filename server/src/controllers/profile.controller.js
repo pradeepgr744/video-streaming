@@ -20,15 +20,19 @@ const cookieOptions = {
 
 // strip the pin hash before sending a profile back to the client,
 // and always recompute isKid so an ageing profile stays accurate
+const DEFAULT_AVATAR =
+  "https://img.magnific.com/premium-vector/vector-flat-illustration-grayscale-avatar-user-profile-person-icon-gender-neutral-silhouette-profile-picture-suitable-social-media-profiles-icons-screensavers-as-templatex9xa_719432-2191.jpg?semt=ais_test_b&w=740&q=80";
+
 const sanitizeProfile = (profile) => {
     const obj = profile.toObject ? profile.toObject() : profile;
+
     return {
         _id: obj._id,
         name: obj.name,
         dob: obj.dob,
         isKid: calculateIsKid(obj.dob),
         language: obj.language,
-        avatar: obj.avatar,
+        avatar: obj.avatar || DEFAULT_AVATAR,
         hasPin: Boolean(obj.pin),
         createdAt: obj.createdAt,
         updatedAt: obj.updatedAt
