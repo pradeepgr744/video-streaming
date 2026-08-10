@@ -121,7 +121,8 @@ const modifyProfile = asyncHandler(async (req, res) => {
         language,
         avatar,
         currentPin,
-        newPin
+        newPin,
+        currentpin
     } = req.body;
 
     const user = await User.findById(req.user._id);
@@ -133,11 +134,13 @@ const modifyProfile = asyncHandler(async (req, res) => {
     const profile = findProfileOrThrow(user, profileId);
 
     // Verify current PIN before making any changes
-    const isPinCorrect = await profile.isPinCorrect(currentPin);
+    const pin = currentPin ?? currentpin;
 
-    if (!isPinCorrect) {
-        throw new ApiError(401, "Incorrect profile pin");
-    }
+const isPinCorrect = await profile.isPinCorrect(pin);
+
+if (!isPinCorrect) {
+    throw new ApiError(401, "Incorrect profile pin");
+}
 
     if (name !== undefined) {
         if (!name.trim()) {
