@@ -115,38 +115,67 @@ user.profiles.push({
 // also used as the gateway to delete a profile (same validated flow, see deleteProfile below)
 const modifyProfile = asyncHandler(async (req, res) => {
     const { profileId } = req.params;
-    const { name, dob, language, currentPin, newPin } = req.body;
+    const {
+        name,
+        dob,
+        language,
+        avatar,
+        currentPin,
+        newPin
+    } = req.body;
 
     const user = await User.findById(req.user._id);
+
     if (!user) {
         throw new ApiError(404, "User not found");
     }
 
     const profile = findProfileOrThrow(user, profileId);
 
-    // if the profile is locked, the correct key must be supplied before any change is made
+    // Verify current PIN before making any changes
     const isPinCorrect = await profile.isPinCorrect(currentPin);
+
     if (!isPinCorrect) {
         throw new ApiError(401, "Incorrect profile pin");
     }
 
     if (name !== undefined) {
-        if (!name.trim()) throw new ApiError(400, "Name cannot be empty");
+        if (!name.trim()) {
+            throw new ApiError(400, "Name cannot be empty");
+        }
+
         profile.name = name.trim();
     }
 
     if (dob !== undefined) {
-        if (isNaN(new Date(dob).getTime())) throw new ApiError(400, "Invalid date of birth");
+        if (isNaN(new Date(dob).getTime())) {
+            throw new ApiError(400, "Invalid date of birth");
+        }
+
         profile.dob = dob;
     }
 
     if (language !== undefined) {
-        if (!SUPPORTED_LANGUAGE_CODES.includes(language)) throw new ApiError(400, "Unsupported language");
+        if (!SUPPORTED_LANGUAGE_CODES.includes(language)) {
+            throw new ApiError(400, "Unsupported language");
+        }
+
         profile.language = language;
     }
 
+    if (avatar !== undefined) {
+        if (!avatar.trim()) {
+            throw new ApiError(400, "Avatar cannot be empty");
+        }
+
+        profile.avatar = avatar.trim();
+    }
+
     if (newPin !== undefined) {
-        if (!/^\d{4,6}$/.test(newPin)) throw new ApiError(400, "A 4-6 digit pin is required");
+        if (!/^\d{4,6}$/.test(newPin)) {
+            throw new ApiError(400, "A 4-6 digit pin is required");
+        }
+
         profile.pin = newPin;
     }
 
@@ -154,7 +183,13 @@ const modifyProfile = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { profile: sanitizeProfile(profile) }, "Profile updated successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                { profile: sanitizeProfile(profile) },
+                "Profile updated successfully"
+            )
+        );
 });
 
 // DELETE /profiles/:profileId -> goes through the same pin-checked flow as modifyProfile,
