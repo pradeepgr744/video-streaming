@@ -135,13 +135,14 @@ const modifyProfile = asyncHandler(async (req, res) => {
 
     // Verify current PIN before making any changes
     const pin = currentPin ?? currentpin;
-
+if (profile.hasPin) {
+    
 const isPinCorrect = await profile.isPinCorrect(pin);
 
 if (!isPinCorrect) {
     throw new ApiError(401, "Incorrect profile pin");
 }
-
+}
     if (name !== undefined) {
         if (!name.trim()) {
             throw new ApiError(400, "Name cannot be empty");
@@ -199,7 +200,7 @@ if (!isPinCorrect) {
 // then removes the profile. At least MIN_PROFILES must always remain on the account.
 const deleteProfile = asyncHandler(async (req, res) => {
     const { profileId } = req.params;
-    const { currentPin } = req.body;
+    const { currentpin } = req.body;
 
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -207,11 +208,12 @@ const deleteProfile = asyncHandler(async (req, res) => {
     }
 
     const profile = findProfileOrThrow(user, profileId);
-
-    const isPinCorrect = await profile.isPinCorrect(currentPin);
+if (profile.hasPin) {
+    const isPinCorrect = await profile.isPinCorrect(currentpin);
     if (!isPinCorrect) {
         throw new ApiError(401, "Incorrect profile pin");
     }
+}
 
     if (user.profiles.length <= MIN_PROFILES) {
         throw new ApiError(400, `At least ${MIN_PROFILES} profile must remain on the account`);
@@ -237,11 +239,12 @@ const selectProfile = asyncHandler(async (req, res) => {
     }
 
     const profile = findProfileOrThrow(user, profileId);
-
+if (profile.hasPin) {
     const isPinCorrect = await profile.isPinCorrect(pin);
     if (!isPinCorrect) {
         throw new ApiError(401, "Incorrect profile pin");
     }
+}
 
     return res
         .status(200)
