@@ -89,12 +89,7 @@ let avatarLocalPath;
         username: username.toLowerCase(),
         // every account starts with one default profile (no lock/pin set yet;
         // the user can add up to 3 more, and lock any profile via update-profile)
-        profiles: [
-            {
-                name: fullName,
-                language: "en_US"
-            }
-        ]
+        profiles: []
     })
 
     const createdUser = await User.findById(user._id).select(
