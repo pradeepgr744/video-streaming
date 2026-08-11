@@ -5,6 +5,7 @@ import { User, calculateIsKid } from "../models/user.model.js";
 import { Image } from "../models/image.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import fs from "fs";
+
 import {
     MAX_PROFILES,
     MIN_PROFILES,
@@ -12,19 +13,25 @@ import {
     ACTIVE_PROFILE_COOKIE
 } from "../constants.js";
 
+
 const cookieOptions = {
     httpOnly: true,
     secure: true,
     sameSite: "Strict"
 };
 
-// strip the pin hash before sending a profile back to the client,
-// and always recompute isKid so an ageing profile stays accurate
-const DEFAULT_AVATAR =
-  "https://img.magnific.com/premium-vector/vector-flat-illustration-grayscale-avatar-user-profile-person-icon-gender-neutral-silhouette-profile-picture-suitable-social-media-profiles-icons-screensavers-as-templatex9xa_719432-2191.jpg?semt=ais_test_b&w=740&q=80";
 
+// Default avatar
+const DEFAULT_AVATAR =
+    "https://img.magnific.com/premium-vector/vector-flat-illustration-grayscale-avatar-user-profile-person-icon-gender-neutral-silhouette-profile-picture-suitable-social-media-profiles-icons-screensavers-as-templatex9xa_719432-2191.jpg?semt=ais_test_b&w=740&q=80";
+
+
+// Remove sensitive profile data before sending response
 const sanitizeProfile = (profile) => {
-    const obj = profile.toObject ? profile.toObject() : profile;
+
+    const obj = profile.toObject
+        ? profile.toObject()
+        : profile;
 
     return {
         _id: obj._id,
@@ -33,22 +40,35 @@ const sanitizeProfile = (profile) => {
         isKid: calculateIsKid(obj.dob),
         language: obj.language,
         avatar: obj.avatar || DEFAULT_AVATAR,
+
+        // true only when a PIN exists
         hasPin: Boolean(obj.pin),
+
         createdAt: obj.createdAt,
         updatedAt: obj.updatedAt
     };
 };
 
+
+// Find profile
 const findProfileOrThrow = (user, profileId) => {
+
     const profile = user.profiles.id(profileId);
+
     if (!profile) {
         throw new ApiError(404, "Profile not found");
     }
+
     return profile;
 };
 
-// GET /profiles -> profile1, profile2, profile3, profile4 (whatever exists, max 4)
+
+// ============================================================
+// GET /profiles
+// ============================================================
+
 const getProfiles = asyncHandler(async (req, res) => {
+
     const user = await User.findById(req.user._id);
 
     if (!user) {
@@ -59,62 +79,164 @@ const getProfiles = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { profiles }, "Profiles fetched successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                { profiles },
+                "Profiles fetched successfully"
+            )
+        );
 });
 
-// POST /profiles -> add profile: name, dob, language, pin (key to lock the profile)
+
+// ============================================================
+// POST /profiles
+// Create profile
+// ============================================================
+
 const addProfile = asyncHandler(async (req, res) => {
-    const { name, dob, language, pin,avatar } = req.body;
+
+    const {
+        name,
+        dob,
+        language,
+        pin,
+        avatar
+    } = req.body;
+
+
+    // --------------------------------------------------------
+    // Validate name and DOB
+    // --------------------------------------------------------
 
     if (!name?.trim() || !dob) {
-        throw new ApiError(400, "Name and date of birth are required");
+        throw new ApiError(
+            400,
+            "Name and date of birth are required"
+        );
     }
+
 
     if (isNaN(new Date(dob).getTime())) {
-        throw new ApiError(400, "Invalid date of birth");
+        throw new ApiError(
+            400,
+            "Invalid date of birth"
+        );
     }
 
-    if (language && !SUPPORTED_LANGUAGE_CODES.includes(language)) {
-        throw new ApiError(400, "Unsupported language");
+
+    // --------------------------------------------------------
+    // Validate language
+    // --------------------------------------------------------
+
+    if (
+        language &&
+        !SUPPORTED_LANGUAGE_CODES.includes(language)
+    ) {
+        throw new ApiError(
+            400,
+            "Unsupported language"
+        );
     }
 
-    if (!pin || !/^\d{4,6}$/.test(pin)) {
-        throw new ApiError(400, "A 4-6 digit pin is required to lock this profile");
+
+    // --------------------------------------------------------
+    // PIN
+    //
+    // pin = "1234" -> valid
+    // pin = "0000" -> valid
+    // pin = ""     -> no PIN
+    // pin omitted  -> no PIN
+    // --------------------------------------------------------
+
+    if (
+        pin &&
+        !/^\d{4,6}$/.test(pin)
+    ) {
+        throw new ApiError(
+            400,
+            "PIN must be 4-6 digits"
+        );
     }
+
+
+    // --------------------------------------------------------
+    // Get authenticated user
+    // --------------------------------------------------------
 
     const user = await User.findById(req.user._id);
 
     if (!user) {
-        throw new ApiError(404, "User not found");
+        throw new ApiError(
+            404,
+            "User not found"
+        );
     }
+
+
+    // --------------------------------------------------------
+    // Maximum profiles
+    // --------------------------------------------------------
 
     if (user.profiles.length >= MAX_PROFILES) {
-        throw new ApiError(400, `A maximum of ${MAX_PROFILES} profiles is allowed per account`);
+        throw new ApiError(
+            400,
+            `A maximum of ${MAX_PROFILES} profiles is allowed per account`
+        );
     }
-const DEFAULT_AVATAR =
-  "https://img.magnific.com/premium-vector/vector-flat-illustration-grayscale-avatar-user-profile-person-icon-gender-neutral-silhouette-profile-picture-suitable-social-media-profiles-icons-screensavers-as-templatex9xa_719432-2191.jpg?semt=ais_test_b&w=740&q=80";
 
-user.profiles.push({
-    name: name.trim(),
-    dob,
-    language: language || "en_US",
-    pin,
-    avatar: avatar || DEFAULT_AVATAR
-});
 
-    await user.save({ validateBeforeSave: false });
+    // --------------------------------------------------------
+    // Create profile
+    // --------------------------------------------------------
 
-    const createdProfile = user.profiles[user.profiles.length - 1];
+    user.profiles.push({
+        name: name.trim(),
+
+        dob,
+
+        language: language || "en_US",
+
+        // Empty string becomes null
+        // Actual PIN will be hashed by profileSchema pre-save
+        pin: pin?.trim() || null,
+
+        avatar: avatar || DEFAULT_AVATAR
+    });
+
+
+    await user.save({
+        validateBeforeSave: false
+    });
+
+
+    const createdProfile =
+        user.profiles[user.profiles.length - 1];
+
 
     return res
         .status(201)
-        .json(new ApiResponse(201, { profile: sanitizeProfile(createdProfile) }, "Profile added successfully"));
+        .json(
+            new ApiResponse(
+                201,
+                {
+                    profile: sanitizeProfile(createdProfile)
+                },
+                "Profile added successfully"
+            )
+        );
 });
 
-// PATCH /profiles/:profileId -> modify name/dob/language/pin.
-// also used as the gateway to delete a profile (same validated flow, see deleteProfile below)
+
+// ============================================================
+// PATCH /profiles/:profileId
+// Modify profile
+// ============================================================
+
 const modifyProfile = asyncHandler(async (req, res) => {
+
     const { profileId } = req.params;
+
     const {
         name,
         dob,
@@ -125,237 +247,597 @@ const modifyProfile = asyncHandler(async (req, res) => {
         currentpin
     } = req.body;
 
+
+    // --------------------------------------------------------
+    // Get authenticated user
+    // --------------------------------------------------------
+
     const user = await User.findById(req.user._id);
 
     if (!user) {
-        throw new ApiError(404, "User not found");
+        throw new ApiError(
+            404,
+            "User not found"
+        );
     }
 
-    const profile = findProfileOrThrow(user, profileId);
 
-    // Verify current PIN before making any changes
-    const pin = currentPin ?? currentpin;
-if (profile.hasPin) {
-    
-const isPinCorrect = await profile.isPinCorrect(pin);
+    // --------------------------------------------------------
+    // Find profile
+    // --------------------------------------------------------
 
-if (!isPinCorrect) {
-    throw new ApiError(401, "Incorrect profile pin");
-}
-}
+    const profile =
+        findProfileOrThrow(user, profileId);
+
+
+    // --------------------------------------------------------
+    // Verify existing PIN
+    // --------------------------------------------------------
+
+    const pin =
+        currentPin ?? currentpin;
+
+
+    // IMPORTANT:
+    // Use profile.pin, NOT profile.hasPin
+    //
+    // profile.hasPin only exists in sanitized response.
+    // It is not a field in the mongoose schema.
+    // --------------------------------------------------------
+
+    if (profile.pin) {
+
+        const isPinCorrect =
+            await profile.isPinCorrect(pin);
+
+        if (!isPinCorrect) {
+            throw new ApiError(
+                401,
+                "Incorrect profile pin"
+            );
+        }
+    }
+
+
+    // --------------------------------------------------------
+    // Name
+    // --------------------------------------------------------
+
     if (name !== undefined) {
+
         if (!name.trim()) {
-            throw new ApiError(400, "Name cannot be empty");
+            throw new ApiError(
+                400,
+                "Name cannot be empty"
+            );
         }
 
         profile.name = name.trim();
     }
 
+
+    // --------------------------------------------------------
+    // DOB
+    // --------------------------------------------------------
+
     if (dob !== undefined) {
+
         if (isNaN(new Date(dob).getTime())) {
-            throw new ApiError(400, "Invalid date of birth");
+            throw new ApiError(
+                400,
+                "Invalid date of birth"
+            );
         }
 
         profile.dob = dob;
     }
 
+
+    // --------------------------------------------------------
+    // Language
+    // --------------------------------------------------------
+
     if (language !== undefined) {
-        if (!SUPPORTED_LANGUAGE_CODES.includes(language)) {
-            throw new ApiError(400, "Unsupported language");
+
+        if (
+            !SUPPORTED_LANGUAGE_CODES.includes(language)
+        ) {
+            throw new ApiError(
+                400,
+                "Unsupported language"
+            );
         }
 
         profile.language = language;
     }
 
+
+    // --------------------------------------------------------
+    // Avatar
+    // --------------------------------------------------------
+
     if (avatar !== undefined) {
+
         if (!avatar.trim()) {
-            throw new ApiError(400, "Avatar cannot be empty");
+            throw new ApiError(
+                400,
+                "Avatar cannot be empty"
+            );
         }
 
         profile.avatar = avatar.trim();
     }
 
-    if (newPin !== undefined) {
-        if (!/^\d{4,6}$/.test(newPin)) {
-            throw new ApiError(400, "A 4-6 digit pin is required");
-        }
 
-        profile.pin = newPin;
+    // --------------------------------------------------------
+    // New PIN
+    //
+    // newPin = "1234" -> set PIN
+    // newPin = "0000" -> set PIN
+    // newPin = ""     -> remove PIN
+    // --------------------------------------------------------
+
+    if (newPin !== undefined) {
+
+        // Empty string means remove PIN
+        if (newPin === "") {
+
+            profile.pin = null;
+
+        } else {
+
+            if (!/^\d{4,6}$/.test(newPin)) {
+                throw new ApiError(
+                    400,
+                    "PIN must be 4-6 digits"
+                );
+            }
+
+            profile.pin = newPin;
+        }
     }
 
-    await user.save({ validateBeforeSave: false });
+
+    await user.save({
+        validateBeforeSave: false
+    });
+
 
     return res
         .status(200)
         .json(
             new ApiResponse(
                 200,
-                { profile: sanitizeProfile(profile) },
+                {
+                    profile: sanitizeProfile(profile)
+                },
                 "Profile updated successfully"
             )
         );
 });
 
-// DELETE /profiles/:profileId -> goes through the same pin-checked flow as modifyProfile,
-// then removes the profile. At least MIN_PROFILES must always remain on the account.
+
+// ============================================================
+// DELETE /profiles/:profileId
+// ============================================================
+
 const deleteProfile = asyncHandler(async (req, res) => {
+
     const { profileId } = req.params;
-    const { currentpin } = req.body;
 
-    const user = await User.findById(req.user._id);
+    const {
+        currentPin,
+        currentpin
+    } = req.body;
+
+
+    const user =
+        await User.findById(req.user._id);
+
+
     if (!user) {
-        throw new ApiError(404, "User not found");
+        throw new ApiError(
+            404,
+            "User not found"
+        );
     }
 
-    const profile = findProfileOrThrow(user, profileId);
-if (profile.hasPin) {
-    const isPinCorrect = await profile.isPinCorrect(currentpin);
-    if (!isPinCorrect) {
-        throw new ApiError(401, "Incorrect profile pin");
+
+    const profile =
+        findProfileOrThrow(user, profileId);
+
+
+    // --------------------------------------------------------
+    // Verify PIN only if profile has PIN
+    // --------------------------------------------------------
+
+    const pin =
+        currentPin ?? currentpin;
+
+
+    if (profile.pin) {
+
+        const isPinCorrect =
+            await profile.isPinCorrect(pin);
+
+        if (!isPinCorrect) {
+            throw new ApiError(
+                401,
+                "Incorrect profile pin"
+            );
+        }
     }
-}
+
+
+    // --------------------------------------------------------
+    // Minimum profile check
+    // --------------------------------------------------------
 
     if (user.profiles.length <= MIN_PROFILES) {
-        throw new ApiError(400, `At least ${MIN_PROFILES} profile must remain on the account`);
+
+        throw new ApiError(
+            400,
+            `At least ${MIN_PROFILES} profile must remain on the account`
+        );
     }
+
 
     profile.deleteOne();
-    await user.save({ validateBeforeSave: false });
+
+
+    await user.save({
+        validateBeforeSave: false
+    });
+
 
     return res
         .status(200)
-        .json(new ApiResponse(200, {}, "Profile deleted successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                {},
+                "Profile deleted successfully"
+            )
+        );
 });
 
-// POST /profiles/:profileId/select -> validate this profile's key, then mark it
-// active for this device only (httpOnly cookie), Netflix-profile-switch style
+
+// ============================================================
+// POST /profiles/:profileId/select
+// ============================================================
+
 const selectProfile = asyncHandler(async (req, res) => {
+
     const { profileId } = req.params;
+
     const { pin } = req.body;
 
-    const user = await User.findById(req.user._id);
+
+    const user =
+        await User.findById(req.user._id);
+
+
     if (!user) {
-        throw new ApiError(404, "User not found");
+        throw new ApiError(
+            404,
+            "User not found"
+        );
     }
 
-    const profile = findProfileOrThrow(user, profileId);
-if (profile.hasPin) {
-    const isPinCorrect = await profile.isPinCorrect(pin);
-    if (!isPinCorrect) {
-        throw new ApiError(401, "Incorrect profile pin");
+
+    const profile =
+        findProfileOrThrow(user, profileId);
+
+
+    // --------------------------------------------------------
+    // Verify PIN only if profile has PIN
+    // --------------------------------------------------------
+
+    if (profile.pin) {
+
+        const isPinCorrect =
+            await profile.isPinCorrect(pin);
+
+        if (!isPinCorrect) {
+            throw new ApiError(
+                401,
+                "Incorrect profile pin"
+            );
+        }
     }
-}
+
 
     return res
         .status(200)
-        .cookie(ACTIVE_PROFILE_COOKIE, String(profile._id), cookieOptions)
-        .json(new ApiResponse(200, { profile: sanitizeProfile(profile) }, "Profile selected successfully"));
+        .cookie(
+            ACTIVE_PROFILE_COOKIE,
+            String(profile._id),
+            cookieOptions
+        )
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    profile: sanitizeProfile(profile)
+                },
+                "Profile selected successfully"
+            )
+        );
 });
 
-// GET /profiles/active -> whichever profile is active on this device
+
+// ============================================================
+// GET /profiles/active
+// ============================================================
+
 const getActiveProfile = asyncHandler(async (req, res) => {
-    const activeProfileId = req.cookies?.[ACTIVE_PROFILE_COOKIE];
+
+    const activeProfileId =
+        req.cookies?.[ACTIVE_PROFILE_COOKIE];
+
 
     if (!activeProfileId) {
+
         return res
             .status(200)
-            .json(new ApiResponse(200, { profile: null }, "No active profile selected on this device"));
+            .json(
+                new ApiResponse(
+                    200,
+                    { profile: null },
+                    "No active profile selected on this device"
+                )
+            );
     }
 
-    const user = await User.findById(req.user._id);
-    const profile = user?.profiles?.id(activeProfileId);
+
+    const user =
+        await User.findById(req.user._id);
+
+
+    const profile =
+        user?.profiles?.id(activeProfileId);
+
 
     if (!profile) {
+
         return res
             .status(200)
-            .clearCookie(ACTIVE_PROFILE_COOKIE, cookieOptions)
-            .json(new ApiResponse(200, { profile: null }, "No active profile selected on this device"));
+            .clearCookie(
+                ACTIVE_PROFILE_COOKIE,
+                cookieOptions
+            )
+            .json(
+                new ApiResponse(
+                    200,
+                    { profile: null },
+                    "No active profile selected on this device"
+                )
+            );
     }
+
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { profile: sanitizeProfile(profile) }, "Active profile fetched successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    profile: sanitizeProfile(profile)
+                },
+                "Active profile fetched successfully"
+            )
+        );
 });
 
-// PATCH /profiles/:profileId/avatar -> upload/replace a profile's picture (multipart, field name "avatar")
+
+// ============================================================
+// PATCH /profiles/:profileId/avatar
+// Upload profile avatar
+// ============================================================
+
 const updateProfileAvatar = asyncHandler(async (req, res) => {
+
     const { profileId } = req.params;
-    const avatarLocalPath = req.file?.path;
+
+    const avatarLocalPath =
+        req.file?.path;
+
 
     if (!avatarLocalPath) {
-        throw new ApiError(400, "Avatar image file is missing");
+
+        throw new ApiError(
+            400,
+            "Avatar image file is missing"
+        );
     }
 
-    const user = await User.findById(req.user._id);
+
+    const user =
+        await User.findById(req.user._id);
+
+
     if (!user) {
-        if (fs.existsSync(avatarLocalPath)) fs.unlinkSync(avatarLocalPath);
-        throw new ApiError(404, "User not found");
+
+        if (fs.existsSync(avatarLocalPath)) {
+            fs.unlinkSync(avatarLocalPath);
+        }
+
+        throw new ApiError(
+            404,
+            "User not found"
+        );
     }
 
-    const profile = user.profiles.id(profileId);
+
+    const profile =
+        user.profiles.id(profileId);
+
+
     if (!profile) {
-        if (fs.existsSync(avatarLocalPath)) fs.unlinkSync(avatarLocalPath);
-        throw new ApiError(404, "Profile not found");
+
+        if (fs.existsSync(avatarLocalPath)) {
+            fs.unlinkSync(avatarLocalPath);
+        }
+
+        throw new ApiError(
+            404,
+            "Profile not found"
+        );
     }
 
-    const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+    const avatar =
+        await uploadOnCloudinary(
+            avatarLocalPath
+        );
+
+
     if (!avatar?.url) {
-        throw new ApiError(500, "Something went wrong while uploading the avatar");
+
+        throw new ApiError(
+            500,
+            "Something went wrong while uploading the avatar"
+        );
     }
 
-    profile.avatar = avatar.url;
-    await user.save({ validateBeforeSave: false });
+
+    profile.avatar =
+        avatar.url;
+
+
+    await user.save({
+        validateBeforeSave: false
+    });
+
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { profile: sanitizeProfile(profile) }, "Profile avatar updated successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    profile: sanitizeProfile(profile)
+                },
+                "Profile avatar updated successfully"
+            )
+        );
 });
 
-// GET /profiles/avatars/presets -> avatar options pulled from the "images" collection
+
+// ============================================================
+// GET /profiles/avatars/presets
+// ============================================================
+
 const getPresetAvatars = asyncHandler(async (req, res) => {
-    const imageDoc = await Image.findOne();
 
-    const avatars = (imageDoc?.avatars || []).map((url, index) => ({
-        id: `avatar${index + 1}`,
-        url
-    }));
+    const imageDoc =
+        await Image.findOne();
+
+
+    const avatars =
+        (imageDoc?.avatars || []).map(
+            (url, index) => ({
+                id: `avatar${index + 1}`,
+                url
+            })
+        );
+
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { avatars }, "Preset avatars fetched successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                { avatars },
+                "Preset avatars fetched successfully"
+            )
+        );
 });
 
-// PATCH /profiles/:profileId/avatar/select -> pick one of the preset avatars by URL
-// (no file upload needed, just { "avatarUrl": "https://api.dicebear.com/..." })
+
+// ============================================================
+// PATCH /profiles/:profileId/avatar/select
+// ============================================================
+
 const selectPresetAvatar = asyncHandler(async (req, res) => {
-    const { profileId } = req.params;
-    const { avatarUrl } = req.body;
+
+    const { profileId } =
+        req.params;
+
+    const { avatarUrl } =
+        req.body;
+
 
     if (!avatarUrl) {
-        throw new ApiError(400, "avatarUrl is required");
+
+        throw new ApiError(
+            400,
+            "avatarUrl is required"
+        );
     }
 
-    const imageDoc = await Image.findOne();
-    const isValidAvatar = imageDoc?.avatars?.includes(avatarUrl);
+
+    const imageDoc =
+        await Image.findOne();
+
+
+    const isValidAvatar =
+        imageDoc?.avatars?.includes(
+            avatarUrl
+        );
+
 
     if (!isValidAvatar) {
-        throw new ApiError(400, "Invalid avatarUrl - must be one of the preset avatars");
+
+        throw new ApiError(
+            400,
+            "Invalid avatarUrl - must be one of the preset avatars"
+        );
     }
 
-    const user = await User.findById(req.user._id);
+
+    const user =
+        await User.findById(req.user._id);
+
+
     if (!user) {
-        throw new ApiError(404, "User not found");
+
+        throw new ApiError(
+            404,
+            "User not found"
+        );
     }
 
-    const profile = findProfileOrThrow(user, profileId);
 
-    profile.avatar = avatarUrl;
-    await user.save({ validateBeforeSave: false });
+    const profile =
+        findProfileOrThrow(
+            user,
+            profileId
+        );
+
+
+    profile.avatar =
+        avatarUrl;
+
+
+    await user.save({
+        validateBeforeSave: false
+    });
+
 
     return res
         .status(200)
-        .json(new ApiResponse(200, { profile: sanitizeProfile(profile) }, "Profile avatar updated successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    profile: sanitizeProfile(profile)
+                },
+                "Profile avatar updated successfully"
+            )
+        );
 });
+
 
 export {
     getProfiles,
