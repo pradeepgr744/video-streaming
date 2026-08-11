@@ -68,14 +68,27 @@ const findProfileOrThrow = (user, profileId) => {
 // ============================================================
 
 const getProfiles = asyncHandler(async (req, res) => {
-
     const user = await User.findById(req.user._id);
 
     if (!user) {
         throw new ApiError(404, "User not found");
     }
 
-    const profiles = user.profiles.map(sanitizeProfile);
+    const profiles = user.profiles.map((profile) => {
+        const obj = profile.toObject();
+
+        return {
+            _id: obj._id,
+            name: obj.name,
+            dob: obj.dob,
+            isKid: calculateIsKid(obj.dob),
+            language: obj.language,
+            avatar: obj.avatar || DEFAULT_AVATAR,
+            hasPin: Boolean(obj.pin),
+            createdAt: obj.createdAt,
+            updatedAt: obj.updatedAt
+        };
+    });
 
     return res
         .status(200)
