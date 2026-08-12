@@ -247,7 +247,6 @@ const addProfile = asyncHandler(async (req, res) => {
 // ============================================================
 
 const modifyProfile = asyncHandler(async (req, res) => {
-
     const { profileId } = req.params;
 
     const {
@@ -256,52 +255,25 @@ const modifyProfile = asyncHandler(async (req, res) => {
         language,
         avatar,
         currentPin,
-        newPin,
         currentpin
     } = req.body;
 
-
-    // --------------------------------------------------------
     // Get authenticated user
-    // --------------------------------------------------------
-
     const user = await User.findById(req.user._id);
 
     if (!user) {
-        throw new ApiError(
-            404,
-            "User not found"
-        );
+        throw new ApiError(404, "User not found");
     }
 
-
-    // --------------------------------------------------------
     // Find profile
-    // --------------------------------------------------------
+    const profile = findProfileOrThrow(user, profileId);
 
-    const profile =
-        findProfileOrThrow(user, profileId);
+    // Get current PIN from request
+    const pin = currentPin ?? currentpin;
 
-
-    // --------------------------------------------------------
-    // Verify existing PIN
-    // --------------------------------------------------------
-
-    const pin =
-        currentPin ?? currentpin;
-
-
-    // IMPORTANT:
-    // Use profile.pin, NOT profile.hasPin
-    //
-    // profile.hasPin only exists in sanitized response.
-    // It is not a field in the mongoose schema.
-    // --------------------------------------------------------
-
+    // Verify PIN only if profile has a PIN
     if (profile.pin) {
-
-        const isPinCorrect =
-            await profile.isPinCorrect(pin);
+        const isPinCorrect = await profile.isPinCorrect(pin);
 
         if (!isPinCorrect) {
             throw new ApiError(
@@ -311,13 +283,8 @@ const modifyProfile = asyncHandler(async (req, res) => {
         }
     }
 
-
-    // --------------------------------------------------------
-    // Name
-    // --------------------------------------------------------
-
+    // Update name
     if (name !== undefined) {
-
         if (!name.trim()) {
             throw new ApiError(
                 400,
@@ -328,13 +295,8 @@ const modifyProfile = asyncHandler(async (req, res) => {
         profile.name = name.trim();
     }
 
-
-    // --------------------------------------------------------
-    // DOB
-    // --------------------------------------------------------
-
+    // Update DOB
     if (dob !== undefined) {
-
         if (isNaN(new Date(dob).getTime())) {
             throw new ApiError(
                 400,
@@ -345,16 +307,9 @@ const modifyProfile = asyncHandler(async (req, res) => {
         profile.dob = dob;
     }
 
-
-    // --------------------------------------------------------
-    // Language
-    // --------------------------------------------------------
-
+    // Update language
     if (language !== undefined) {
-
-        if (
-            !SUPPORTED_LANGUAGE_CODES.includes(language)
-        ) {
+        if (!SUPPORTED_LANGUAGE_CODES.includes(language)) {
             throw new ApiError(
                 400,
                 "Unsupported language"
@@ -364,13 +319,8 @@ const modifyProfile = asyncHandler(async (req, res) => {
         profile.language = language;
     }
 
-
-    // --------------------------------------------------------
-    // Avatar
-    // --------------------------------------------------------
-
+    // Update avatar
     if (avatar !== undefined) {
-
         if (!avatar.trim()) {
             throw new ApiError(
                 400,
@@ -381,40 +331,9 @@ const modifyProfile = asyncHandler(async (req, res) => {
         profile.avatar = avatar.trim();
     }
 
-
-    // --------------------------------------------------------
-    // New PIN
-    //
-    // newPin = "1234" -> set PIN
-    // newPin = "0000" -> set PIN
-    // newPin = ""     -> remove PIN
-    // --------------------------------------------------------
-
-    if (newPin !== undefined) {
-
-        // Empty string means remove PIN
-        if (newPin === "") {
-
-            profile.pin = null;
-
-        } else {
-
-            if (!/^\d{4,6}$/.test(newPin)) {
-                throw new ApiError(
-                    400,
-                    "PIN must be 4-6 digits"
-                );
-            }
-
-            profile.pin = newPin;
-        }
-    }
-
-
     await user.save({
         validateBeforeSave: false
     });
-
 
     return res
         .status(200)
@@ -428,7 +347,6 @@ const modifyProfile = asyncHandler(async (req, res) => {
             )
         );
 });
-
 
 // ============================================================
 // DELETE /profiles/:profileId
